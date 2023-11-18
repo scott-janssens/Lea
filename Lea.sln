@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34221.43
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lea", "Lea\Lea.csproj", "{5EA1E33D-A6AF-45B7-88B3-5940C6F2AEC4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaTests", "LeaTests\LeaTests.csproj", "{6BD92265-AE60-401A-A9CB-311967C74AB4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5EA1E33D-A6AF-45B7-88B3-5940C6F2AEC4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5EA1E33D-A6AF-45B7-88B3-5940C6F2AEC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5EA1E33D-A6AF-45B7-88B3-5940C6F2AEC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5EA1E33D-A6AF-45B7-88B3-5940C6F2AEC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6BD92265-AE60-401A-A9CB-311967C74AB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BD92265-AE60-401A-A9CB-311967C74AB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6BD92265-AE60-401A-A9CB-311967C74AB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6BD92265-AE60-401A-A9CB-311967C74AB4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3403E50E-8CCC-4AD3-BAAC-E086BAE8F722}
+	EndGlobalSection
+EndGlobal
