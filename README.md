@@ -37,3 +37,18 @@ public class MyEvent : IEvent
 ```
 
 Lea keeps only weak references to handlers so will not prevent garbage collection of any object with a method registered as a handler.
+
+Handler methods may be unsubscribed to stop receiveing events either by passing the method delegate or the token object returned when subscribed to EventAggregator.Unsubscribe().  If the handler method goes out of scope and its containing object is garbage collected, EventAggregator will clean itself up and automatically remove the missing subscription.
+
+```
+{
+  var myEventHandlerToken = eventAggregactor.Subscribe<MyEvent>(MyEventHandler);
+  var asyncMyEventHandlerToken = eventAggregactor.Subscribe<MyEvent>(AsyncMyEventHandler);
+
+  ...
+
+  eventAggregator.Unsubscribe<MyEvent>(myEventHandlerToken);  // unsub with token
+  eventAggregator.Unsubscribe<MyEvent>(AsyncMyEventHandler);  // unsub with delegate
+}
+
+```

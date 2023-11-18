@@ -5,21 +5,32 @@ using static Lea.IEventAggregator;
 
 namespace Lea;
 
+/// <summary>
+/// Class implementation of Lea Event Aggregator
+/// </summary>
 public class EventAggregator : IEventAggregator
 {
     private readonly ILogger<IEventAggregator>? _logger;
     private readonly ReaderWriterLock readerWriterLock = new();
     private readonly Dictionary<Type, SubscriptionList> _subscriptions = new();
 
+    /// <summary>
+    /// Constructor
+    /// </summary>
     public EventAggregator()
     {
     }
 
+    /// <summary>
+    /// Constructor
+    /// </summary>
+    /// <param name="logger">optional logget object</param>
     public EventAggregator(ILogger<IEventAggregator> logger)
     {
         _logger = logger;
     }
 
+    ///<inheritdoc/>
     public SubscriptionToken Subscribe<T>(EventAggregatorHandler<T> handler)
         where T : class, IEvent
     {
@@ -40,6 +51,7 @@ public class EventAggregator : IEventAggregator
         finally { readerWriterLock.ReleaseWriterLock(); }
     }
 
+    ///<inheritdoc/>
     public SubscriptionToken Subscribe<T>(AsyncEventAggregatorHandler<T> handler)
            where T : class, IEvent
     {
@@ -60,6 +72,7 @@ public class EventAggregator : IEventAggregator
         finally { readerWriterLock.ReleaseWriterLock(); }
     }
 
+    ///<inheritdoc/>
     public void Unsubscribe<T>(EventAggregatorHandler<T> handler)
         where T : class, IEvent
     {
@@ -74,6 +87,7 @@ public class EventAggregator : IEventAggregator
         finally { readerWriterLock.ReleaseWriterLock(); }
     }
 
+    ///<inheritdoc/>
     public void Unsubscribe<T>(AsyncEventAggregatorHandler<T> handler)
          where T : class, IEvent
     {
@@ -88,6 +102,7 @@ public class EventAggregator : IEventAggregator
         finally { readerWriterLock.ReleaseWriterLock(); }
     }
 
+    ///<inheritdoc/>
     public void Unsubscribe<T>(SubscriptionToken token)
           where T : class, IEvent
     {
@@ -102,6 +117,7 @@ public class EventAggregator : IEventAggregator
         finally { readerWriterLock.ReleaseReaderLock(); }
     }
 
+    ///<inheritdoc/>
     public void Publish(IEvent evt)
     {
         Guard.IsNotNull(evt);
