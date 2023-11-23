@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Diagnostics;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
+using System.Threading;
 using static Lea.IEventAggregator;
 
 namespace Lea;
@@ -11,7 +12,6 @@ namespace Lea;
 public class EventAggregator : IEventAggregator
 {
     private readonly ILogger<IEventAggregator>? _logger;
-    private readonly ReaderWriterLock readerWriterLock = new();
     private readonly Dictionary<Type, SubscriptionList> _subscriptions = new();
 
     /// <summary>
@@ -36,19 +36,13 @@ public class EventAggregator : IEventAggregator
     {
         Guard.IsNotNull(handler);
 
-        readerWriterLock.AcquireWriterLock(Timeout.Infinite);
-
-        try
+        if (!_subscriptions.TryGetValue(typeof(T), out var subscriptionList))
         {
-            if (!_subscriptions.TryGetValue(typeof(T), out var subscriptionList))
-            {
-                subscriptionList = new();
-                _subscriptions.Add(typeof(T), subscriptionList);
-            }
-
-            return subscriptionList.AddHandler(handler);
+            subscriptionList = new();
+            _subscriptions.Add(typeof(T), subscriptionList);
         }
-        finally { readerWriterLock.ReleaseWriterLock(); }
+
+        return subscriptionList.AddHandler(handler);
     }
 
     ///<inheritdoc/>
@@ -57,19 +51,13 @@ public class EventAggregator : IEventAggregator
     {
         Guard.IsNotNull(handler);
 
-        readerWriterLock.AcquireWriterLock(Timeout.Infinite);
-
-        try
+        if (!_subscriptions.TryGetValue(typeof(T), out var subscriptionList))
         {
-            if (!_subscriptions.TryGetValue(typeof(T), out var subscriptionList))
-            {
-                subscriptionList = new();
-                _subscriptions.Add(typeof(T), subscriptionList);
-            }
-
-            return subscriptionList.AddHandler(handler);
+            subscriptionList = new();
+            _subscriptions.Add(typeof(T), subscriptionList);
         }
-        finally { readerWriterLock.ReleaseWriterLock(); }
+
+        return subscriptionList.AddHandler(handler);
     }
 
     ///<inheritdoc/>
@@ -77,14 +65,7 @@ public class EventAggregator : IEventAggregator
         where T : class, IEvent
     {
         Guard.IsNotNull(handler);
-
-        readerWriterLock.AcquireWriterLock(Timeout.Infinite);
-
-        try
-        {
-            _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
-        }
-        finally { readerWriterLock.ReleaseWriterLock(); }
+        _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
     }
 
     ///<inheritdoc/>
@@ -92,14 +73,7 @@ public class EventAggregator : IEventAggregator
          where T : class, IEvent
     {
         Guard.IsNotNull(handler);
-
-        readerWriterLock.AcquireWriterLock(Timeout.Infinite);
-
-        try
-        {
-            _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
-        }
-        finally { readerWriterLock.ReleaseWriterLock(); }
+        _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
     }
 
     ///<inheritdoc/>
@@ -107,14 +81,7 @@ public class EventAggregator : IEventAggregator
           where T : class, IEvent
     {
         Guard.IsNotNull(token);
-
-        readerWriterLock.AcquireReaderLock(Timeout.Infinite);
-
-        try
-        {
-            _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(token);
-        }
-        finally { readerWriterLock.ReleaseReaderLock(); }
+        _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(token);
     }
 
     ///<inheritdoc/>
@@ -124,26 +91,22 @@ public class EventAggregator : IEventAggregator
 
         if (_subscriptions.TryGetValue(evt.GetType(), out var subscriptionList))
         {
-            readerWriterLock.AcquireWriterLock(Timeout.Infinite);
-
             try
             {
                 subscriptionList.CleanUnreferencedHandlers();
             }
-            finally { readerWriterLock.ReleaseReaderLock(); }
-
-            readerWriterLock.AcquireReaderLock(Timeout.Infinite);
-
-            try
+            catch (LockRecursionException)
             {
-                subscriptionList.Invoke(evt, _logger);
+                _logger?.LogInformation("LEA: unable to get recursive write lock in Publish() for event {eventType}; Cleanup not performed.", evt.GetType().Name);
             }
-            finally { readerWriterLock.ReleaseReaderLock(); }
+
+            subscriptionList.Invoke(evt, _logger);
         }
     }
 
     private class SubscriptionList
     {
+        private readonly ReaderWriterLockSlim _readerWriterLock = new(LockRecursionPolicy.SupportsRecursion);
         private MethodInfo? _invoker = null;
         private MethodInfo? _asyncInvoker = null;
 
@@ -172,55 +135,86 @@ public class EventAggregator : IEventAggregator
             return AddHandlerInternal(_asyncReferences, handler);
         }
 
-        private static SubscriptionToken AddHandlerInternal(Dictionary<SubscriptionToken, WeakReference> dict, object handler)
+        private SubscriptionToken AddHandlerInternal(Dictionary<SubscriptionToken, WeakReference> dict, object handler)
         {
             SubscriptionToken token;
-            var pair = dict.FirstOrDefault(x => handler.Equals(x.Value.Target));
 
-            if (pair.Equals(default(KeyValuePair<SubscriptionToken, WeakReference>)))
-            {
-                token = new();
-                dict.Add(token, new WeakReference(handler, true));
-            }
-            else
-            {
-                token = pair.Key;
-            }
+            _readerWriterLock.EnterWriteLock();
 
-            return token;
+            try
+            {
+                var pair = dict.FirstOrDefault(x => handler.Equals(x.Value.Target));
+
+                if (pair.Equals(default(KeyValuePair<SubscriptionToken, WeakReference>)))
+                {
+                    token = new();
+                    dict.Add(token, new WeakReference(handler, true));
+                }
+                else
+                {
+                    token = pair.Key;
+                }
+
+                return token;
+            }
+            finally { _readerWriterLock.ExitWriteLock(); }
         }
 
         public void RemoveHandler<T>(EventAggregatorHandler<T> handler)
             where T : class, IEvent
         {
-            var pair = _references.FirstOrDefault(x => handler.Equals(x.Value.Target));
-            _references.Remove(pair.Key);
+            _readerWriterLock.EnterWriteLock();
+
+            try
+            {
+                var pair = _references.FirstOrDefault(x => handler.Equals(x.Value.Target));
+                _references.Remove(pair.Key);
+            }
+            finally { _readerWriterLock.ExitWriteLock(); }
         }
 
         public void RemoveHandler<T>(AsyncEventAggregatorHandler<T> handler)
             where T : class, IEvent
         {
-            var pair = _asyncReferences.FirstOrDefault(x => handler.Equals(x.Value.Target));
-            _asyncReferences.Remove(pair.Key);
+            _readerWriterLock.EnterWriteLock();
+
+            try
+            {
+                var pair = _asyncReferences.FirstOrDefault(x => handler.Equals(x.Value.Target));
+                _asyncReferences.Remove(pair.Key);
+            }
+            finally { _readerWriterLock.ExitWriteLock(); }
         }
 
         public void RemoveHandler(SubscriptionToken token)
         {
-            _references.Remove(token);
-            _asyncReferences.Remove(token);
+            _readerWriterLock.EnterWriteLock();
+
+            try
+            {
+                _references.Remove(token);
+                _asyncReferences.Remove(token);
+            }
+            finally { _readerWriterLock.ExitWriteLock(); }
         }
 
         public void Invoke(IEvent evt, ILogger<IEventAggregator>? logger)
         {
-            foreach (var reference in _asyncReferences.Values)
-            {
-                InvokeAwaitInternal(reference, evt, logger);
-            }
+            _readerWriterLock.EnterReadLock();
 
-            foreach (var reference in _references.Values)
+            try
             {
-                InvokeInternal(_invoker!, reference, evt, logger);
+                foreach (var reference in _asyncReferences.Values)
+                {
+                    InvokeAwaitInternal(reference, evt, logger);
+                }
+
+                foreach (var reference in _references.Values)
+                {
+                    InvokeInternal(_invoker!, reference, evt, logger);
+                }
             }
+            finally { _readerWriterLock.ExitReadLock(); }
         }
 
         private static void InvokeInternal(MethodInfo info, WeakReference reference, IEvent evt, ILogger<IEventAggregator>? logger)
@@ -255,8 +249,14 @@ public class EventAggregator : IEventAggregator
 
         public void CleanUnreferencedHandlers()
         {
-            CleanUnreferencedHandlersInternal(_asyncReferences);
-            CleanUnreferencedHandlersInternal(_references);
+            _readerWriterLock.EnterWriteLock();
+
+            try
+            {
+                CleanUnreferencedHandlersInternal(_asyncReferences);
+                CleanUnreferencedHandlersInternal(_references);
+            }
+            finally { _readerWriterLock.ExitWriteLock(); }
         }
 
         private static void CleanUnreferencedHandlersInternal(Dictionary<SubscriptionToken, WeakReference> dict)

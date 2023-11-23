@@ -47,14 +47,14 @@ namespace LeaTests
             var handlerCalled = 0;
             string? lastValue = null;
 
-            async Task Handler(TestEvent evt)
+            AsyncEventAggregatorHandler<TestEvent> Handler = async (evt) =>
             {
                 handlerCalled++;
                 lastValue = evt.Value;
                 await Task.Delay(1);
-            }
+            };
 
-            _lea.Subscribe<TestEvent>(Handler);
+            _lea.Subscribe<TestEvent>((AsyncEventAggregatorHandler<TestEvent>)Handler);
             _lea.Publish(new TestEvent() { Value = "one" });
             _lea.Unsubscribe<TestEvent>(Handler);
             _lea.Publish(new TestEvent() { Value = "two" });
@@ -483,6 +483,79 @@ namespace LeaTests
         #region Failures
 
         [Test]
+        public void PublishRecursive()
+        {
+            var loggerMock = new Mock<ILogger<IEventAggregator>>();
+            _lea = new EventAggregator(loggerMock.Object);
+
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            void Handler1(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+
+                _lea.Publish(new TestEvent2());
+            }
+
+            void Handler2(TestEvent2 evt)
+            {
+                if (handlerCalled == 1)
+                {
+                    _lea.Publish(new TestEvent() { Value = "two" });
+                }
+            }
+
+            _lea.Subscribe<TestEvent>(Handler1);
+            _lea.Subscribe<TestEvent2>(Handler2);
+            _lea.Publish(new TestEvent() { Value = "one" });
+
+            loggerMock.Verify(logger => logger.Log(
+                    It.Is<LogLevel>(logLevel => logLevel == LogLevel.Information),
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((@object, @type) => ((IReadOnlyList<KeyValuePair<string, object?>>)@object).Any(x => x.Value!.ToString() == "TestEvent")),
+                    It.Is<Exception?>(x => x == null),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+
+            loggerMock.Verify(logger => logger.Log(
+                    It.Is<LogLevel>(logLevel => logLevel == LogLevel.Information),
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((@object, @type) => ((IReadOnlyList<KeyValuePair<string, object?>>)@object).Any(x => x.Value!.ToString() == "TestEvent2")),
+                    It.Is<Exception?>(x => x == null),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+        }
+
+        [Test]
+        public void PublishRecursiveNoLogger()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            void Handler1(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+
+                _lea.Publish(new TestEvent2());
+            }
+
+            void Handler2(TestEvent2 evt)
+            {
+                if (handlerCalled == 1)
+                {
+                    _lea.Publish(new TestEvent() { Value = "two" });
+                }
+            }
+
+            _lea.Subscribe<TestEvent>(Handler1);
+            _lea.Subscribe<TestEvent2>(Handler2);
+            Assert.DoesNotThrow(() => _lea.Publish(new TestEvent() { Value = "one" }));
+        }
+
+        [Test]
         public void SubscribeNullHandler()
         {
             Assert.Throws<ArgumentNullException>(() => _lea.Subscribe<TestEvent>(null!));
@@ -552,15 +625,6 @@ namespace LeaTests
                     It.Is<Exception>(x => x.InnerException is InvalidOperationException),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
                 Times.Once);
-
-            //loggerMock.Verify(
-            //    logger => logger.Log(
-            //        It.Is<LogLevel>(logLevel => logLevel == LogLevel.Error),
-            //        It.IsAny<EventId>(),
-            //        It.IsAny<It.IsAnyType>(),
-            //        It.Is<Exception>(x => x is FileNotFoundException),
-            //        It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            //    Times.Once);
 
             Assert.Multiple(() =>
             {

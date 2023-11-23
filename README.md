@@ -50,5 +50,6 @@ Handler methods may be unsubscribed to stop receiveing events either by passing 
   eventAggregator.Unsubscribe<MyEvent>(myEventHandlerToken);  // unsub with token
   eventAggregator.Unsubscribe<MyEvent>(AsyncMyEventHandler);  // unsub with delegate
 }
-
 ```
+
+Lea is thread-safe, supporting recursive reads.
