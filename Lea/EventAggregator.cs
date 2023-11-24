@@ -104,6 +104,14 @@ public class EventAggregator : IEventAggregator
         }
     }
 
+    ///<inheritdoc/>
+    public Task PublishAsync(IEvent evt)
+    {
+        Guard.IsNotNull(evt);
+
+        return Task.Run(() => Publish(evt));
+    }
+
     private class SubscriptionList
     {
         private readonly ReaderWriterLockSlim _readerWriterLock = new(LockRecursionPolicy.SupportsRecursion);

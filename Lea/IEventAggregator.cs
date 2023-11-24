@@ -25,6 +25,13 @@ public interface IEventAggregator
     /// </summary>
     /// <param name="evt">event object</param>
     void Publish(IEvent evt);
+
+    /// <summary>
+    /// Publishes an event object asynchronously.  All handlers subscribed for the event type will be called and passed this event object.
+    /// </summary>
+    /// <param name="evt"></param>
+    /// <returns></returns>
+    Task PublishAsync(IEvent evt);
     
     /// <summary>
     /// Subscribes a synchronous handler method to recieve events of Type T.

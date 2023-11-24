@@ -18,7 +18,7 @@ namespace LeaTests
         }
 
         [Test]
-        public void HappyPath()
+        public void Publish()
         {
             var handlerCalled = 0;
             string? lastValue = null;
@@ -33,6 +33,30 @@ namespace LeaTests
             _lea.Publish(new TestEvent() { Value = "one" });
             _lea.Unsubscribe<TestEvent>(Handler);
             _lea.Publish(new TestEvent() { Value = "two" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+            });
+        }
+
+        [Test]
+        public async Task PublishAsync()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            void Handler(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+            }
+
+            _lea.Subscribe<TestEvent>(Handler);
+            await _lea.PublishAsync(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe<TestEvent>(Handler);
+            await _lea.PublishAsync(new TestEvent() { Value = "two" });
 
             Assert.Multiple(() =>
             {
@@ -583,6 +607,12 @@ namespace LeaTests
         public void PublishNull()
         {
             Assert.Throws<ArgumentNullException>(() => _lea.Publish(null!));
+        }
+
+        [Test]
+        public void PublishAsyncNull()
+        {
+            Assert.ThrowsAsync<ArgumentNullException>(async () => await _lea.PublishAsync(null!));
         }
 
         [Test]
