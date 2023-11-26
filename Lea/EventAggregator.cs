@@ -1,7 +1,7 @@
 ﻿using CommunityToolkit.Diagnostics;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
-using System.Threading;
+using System.Runtime.CompilerServices;
 using static Lea.IEventAggregator;
 
 namespace Lea;
@@ -35,14 +35,7 @@ public class EventAggregator : IEventAggregator
         where T : class, IEvent
     {
         Guard.IsNotNull(handler);
-
-        if (!_subscriptions.TryGetValue(typeof(T), out var subscriptionList))
-        {
-            subscriptionList = new();
-            _subscriptions.Add(typeof(T), subscriptionList);
-        }
-
-        return subscriptionList.AddHandler(handler);
+        return GetSubscriptionList(typeof(T)).AddHandler(handler);
     }
 
     ///<inheritdoc/>
@@ -50,14 +43,31 @@ public class EventAggregator : IEventAggregator
            where T : class, IEvent
     {
         Guard.IsNotNull(handler);
+        return GetSubscriptionList(typeof(T)).AddHandler(handler);
+    }
 
-        if (!_subscriptions.TryGetValue(typeof(T), out var subscriptionList))
+    public SubscriptionToken Subscribe(Type type, EventAggregatorHandler<IEvent> handler)
+    {
+        Guard.IsNotNull(handler);
+        return GetSubscriptionList(type).AddHandler(handler);
+    }
+
+    public SubscriptionToken Subscribe(Type type, AsyncEventAggregatorHandler<IEvent> handler)
+    {
+        Guard.IsNotNull(handler);
+        return GetSubscriptionList(type).AddHandler(handler);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private SubscriptionList GetSubscriptionList(Type type)
+    {
+        if (!_subscriptions.TryGetValue(type, out var subscriptionList))
         {
             subscriptionList = new();
-            _subscriptions.Add(typeof(T), subscriptionList);
+            _subscriptions.Add(type, subscriptionList);
         }
 
-        return subscriptionList.AddHandler(handler);
+        return subscriptionList;
     }
 
     ///<inheritdoc/>
@@ -74,6 +84,20 @@ public class EventAggregator : IEventAggregator
     {
         Guard.IsNotNull(handler);
         _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
+    }
+
+    ///<inheritdoc/>
+    public void Unsubscribe(Type type, EventAggregatorHandler<IEvent> handler)
+    {
+        Guard.IsNotNull(handler);
+        _subscriptions.GetValueOrDefault(type)?.RemoveHandler(handler);
+    }
+
+    ///<inheritdoc/>
+    public void Unsubscribe(Type type, AsyncEventAggregatorHandler<IEvent> handler)
+    {
+        Guard.IsNotNull(handler);
+        _subscriptions.GetValueOrDefault(type)?.RemoveHandler(handler);
     }
 
     ///<inheritdoc/>
