@@ -9,10 +9,21 @@ namespace Lea;
 /// <summary>
 /// Class implementation of Lea Event Aggregator
 /// </summary>
-public class EventAggregator : IEventAggregator
+public partial class EventAggregator : IEventAggregator, IDisposable
 {
+    private bool _disposed;
     private readonly ILogger<IEventAggregator>? _logger;
     private readonly Dictionary<Type, SubscriptionList> _subscriptions = new();
+
+    #region LoggerMessages
+
+    [LoggerMessage(LogLevel.Information, "LEA: unable to get recursive write lock in Publish() for event {EventType}; Cleanup not performed.")]
+    static partial void LogPublishNoLock(ILogger logger, string eventType);
+
+    [LoggerMessage(LogLevel.Error, "LEA: An error occured invoking event aggregator handler: {msg}")]
+    static partial void LogError(ILogger logger, Exception ex, string msg);
+
+    #endregion
 
     /// <summary>
     /// Constructor
@@ -30,11 +41,38 @@ public class EventAggregator : IEventAggregator
         _logger = logger;
     }
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                foreach (var list in _subscriptions.Values)
+                {
+                    list.Dispose();
+                }
+            }
+
+            _disposed = true;
+        }
+    }
+
+    ~EventAggregator()
+    {
+        Dispose(false);
+    }
+
     ///<inheritdoc/>
     public SubscriptionToken Subscribe<T>(EventAggregatorHandler<T> handler)
         where T : class, IEvent
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         return GetSubscriptionList(typeof(T)).AddHandler(handler);
     }
 
@@ -42,19 +80,19 @@ public class EventAggregator : IEventAggregator
     public SubscriptionToken Subscribe<T>(AsyncEventAggregatorHandler<T> handler)
            where T : class, IEvent
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         return GetSubscriptionList(typeof(T)).AddHandler(handler);
     }
 
     public SubscriptionToken Subscribe(Type type, EventAggregatorHandler<IEvent> handler)
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         return GetSubscriptionList(type).AddHandler(handler);
     }
 
     public SubscriptionToken Subscribe(Type type, AsyncEventAggregatorHandler<IEvent> handler)
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         return GetSubscriptionList(type).AddHandler(handler);
     }
 
@@ -74,7 +112,7 @@ public class EventAggregator : IEventAggregator
     public void Unsubscribe<T>(EventAggregatorHandler<T> handler)
         where T : class, IEvent
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
     }
 
@@ -82,21 +120,21 @@ public class EventAggregator : IEventAggregator
     public void Unsubscribe<T>(AsyncEventAggregatorHandler<T> handler)
          where T : class, IEvent
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(handler);
     }
 
     ///<inheritdoc/>
     public void Unsubscribe(Type type, EventAggregatorHandler<IEvent> handler)
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         _subscriptions.GetValueOrDefault(type)?.RemoveHandler(handler);
     }
 
     ///<inheritdoc/>
     public void Unsubscribe(Type type, AsyncEventAggregatorHandler<IEvent> handler)
     {
-        Guard.IsNotNull(handler);
+        Guard.IsNotNull(handler, nameof(handler));
         _subscriptions.GetValueOrDefault(type)?.RemoveHandler(handler);
     }
 
@@ -104,14 +142,14 @@ public class EventAggregator : IEventAggregator
     public void Unsubscribe<T>(SubscriptionToken token)
           where T : class, IEvent
     {
-        Guard.IsNotNull(token);
+        Guard.IsNotNull(token, nameof(token));
         _subscriptions.GetValueOrDefault(typeof(T))?.RemoveHandler(token);
     }
 
     ///<inheritdoc/>
     public void Publish(IEvent evt)
     {
-        Guard.IsNotNull(evt);
+        Guard.IsNotNull(evt, nameof(evt));
 
         if (_subscriptions.TryGetValue(evt.GetType(), out var subscriptionList))
         {
@@ -121,7 +159,10 @@ public class EventAggregator : IEventAggregator
             }
             catch (LockRecursionException)
             {
-                _logger?.LogInformation("LEA: unable to get recursive write lock in Publish() for event {eventType}; Cleanup not performed.", evt.GetType().Name);
+                if (_logger != null)
+                {
+                    LogPublishNoLock(_logger, evt.GetType().Name);
+                }
             }
 
             subscriptionList.Invoke(evt, _logger);
@@ -131,19 +172,23 @@ public class EventAggregator : IEventAggregator
     ///<inheritdoc/>
     public Task PublishAsync(IEvent evt)
     {
-        Guard.IsNotNull(evt);
-
+        Guard.IsNotNull(evt, nameof(evt));
         return Task.Run(() => Publish(evt));
     }
 
-    private class SubscriptionList
+    private sealed class SubscriptionList : IDisposable
     {
         private readonly ReaderWriterLockSlim _readerWriterLock = new(LockRecursionPolicy.SupportsRecursion);
-        private MethodInfo? _invoker = null;
-        private MethodInfo? _asyncInvoker = null;
+        private MethodInfo? _invoker;
+        private MethodInfo? _asyncInvoker;
 
         private readonly Dictionary<SubscriptionToken, WeakReference> _references = new();
         private readonly Dictionary<SubscriptionToken, WeakReference> _asyncReferences = new();
+
+        public void Dispose()
+        {
+            _readerWriterLock.Dispose();
+        }
 
         public SubscriptionToken AddHandler<T>(EventAggregatorHandler<T> handler)
             where T : class, IEvent
@@ -253,14 +298,19 @@ public class EventAggregator : IEventAggregator
         {
             if (reference.Target != null)
             {
+#pragma warning disable CA1031 // Do not catch general exception types
                 try
                 {
                     info.Invoke(reference.Target, new[] { evt });
                 }
                 catch (Exception ex)
                 {
-                    logger?.LogError(ex, "An error occured invoking event aggregator handler");
+                    if (logger != null)
+                    {
+                        LogError(logger, ex, ex.ToString());
+                    }
                 }
+#pragma warning restore CA1031 // Do not catch general exception types
             }
         }
 
@@ -272,10 +322,14 @@ public class EventAggregator : IEventAggregator
                 {
                     t.Exception?.Handle(e =>
                     {
-                        logger?.LogError(e, "An error occured invoking event aggregator handler");
+                        if (logger != null)
+                        {
+                            LogError(logger, e, e.ToString());
+                        }
+
                         return true;
                     });
-                });
+                }, TaskScheduler.Current);
             }
         }
 

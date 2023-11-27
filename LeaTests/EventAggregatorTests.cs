@@ -66,7 +66,56 @@ namespace LeaTests
         }
 
         [Test]
-        public void HappyPathAsyncHandler()
+        public void SubscribeNonGeneric()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            void Handler(IEvent evt)
+            {
+                handlerCalled++;
+                lastValue = ((TestEvent)evt).Value;
+            }
+
+            _lea.Subscribe(typeof(TestEvent), Handler);
+            _lea.Publish(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe(typeof(TestEvent), Handler);
+            _lea.Publish(new TestEvent() { Value = "two" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+            });
+        }
+
+        [Test]
+        public async Task SubscribeNonGenericAsync()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            async Task Handler(IEvent evt)
+            {
+                handlerCalled++;
+                lastValue = ((TestEvent)evt).Value;
+                await Task.Delay(1);
+            }
+
+            _lea.Subscribe(typeof(TestEvent), Handler);
+            await _lea.PublishAsync(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe(typeof(TestEvent), Handler);
+            await _lea.PublishAsync(new TestEvent() { Value = "two" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+            });
+        }
+
+        [Test]
+        public void PublishAsyncHandler()
         {
             var handlerCalled = 0;
             string? lastValue = null;
@@ -78,7 +127,7 @@ namespace LeaTests
                 await Task.Delay(1);
             };
 
-            _lea.Subscribe<TestEvent>((AsyncEventAggregatorHandler<TestEvent>)Handler);
+            _lea.Subscribe<TestEvent>(Handler);
             _lea.Publish(new TestEvent() { Value = "one" });
             _lea.Unsubscribe<TestEvent>(Handler);
             _lea.Publish(new TestEvent() { Value = "two" });
@@ -241,6 +290,64 @@ namespace LeaTests
 
             _lea.Subscribe<TestEvent>(Handler1);
             _lea.Unsubscribe<TestEvent2>(Handler2);
+            _lea.Publish(new TestEvent() { Value = "one" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+            });
+        }
+
+        [Test]
+        public void UnsubscribeNonGenericNotSubscribed()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            void Handler1(IEvent evt)
+            {
+                handlerCalled++;
+                lastValue = ((TestEvent)evt).Value;
+            }
+
+            void Handler2(IEvent evt)
+            {
+                handlerCalled++;
+            }
+
+            _lea.Subscribe(typeof(TestEvent), Handler1);
+            _lea.Unsubscribe(typeof(TestEvent2), Handler2);
+            _lea.Publish(new TestEvent() { Value = "one" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+            });
+        }
+
+        [Test]
+        public void UnsubscribeNonGenericNotSubscribedAsyncHandler()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+
+            async Task Handler1(IEvent evt)
+            {
+                handlerCalled++;
+                lastValue = ((TestEvent)evt).Value;
+                await Task.Delay(1);
+            }
+
+            async Task Handler2(IEvent evt)
+            {
+                handlerCalled++;
+                await Task.Delay(1);
+            }
+
+            _lea.Subscribe(typeof(TestEvent), Handler1);
+            _lea.Unsubscribe(typeof(TestEvent2), Handler2);
             _lea.Publish(new TestEvent() { Value = "one" });
 
             Assert.Multiple(() =>
@@ -504,12 +611,23 @@ namespace LeaTests
             });
         }
 
+        [Test]
+        public void Dispose()
+        {
+            Assert.DoesNotThrow(() =>
+            {
+                using var lea = new EventAggregator();
+                lea.Subscribe<TestEvent>(e => { });
+            });
+        }
+
         #region Failures
 
         [Test]
         public void PublishRecursive()
         {
             var loggerMock = new Mock<ILogger<IEventAggregator>>();
+            loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
             _lea = new EventAggregator(loggerMock.Object);
 
             var handlerCalled = 0;
@@ -619,6 +737,7 @@ namespace LeaTests
         public void InvokeLogError()
         {
             var loggerMock = new Mock<ILogger<IEventAggregator>>();
+            loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
             _lea = new EventAggregator(loggerMock.Object);
 
             var handlerCalled = 0;
