@@ -1,6 +1,4 @@
-﻿using CommunityToolkit.Diagnostics;
-
-namespace Lea;
+﻿namespace Lea;
 
 /// <summary>
 /// Interface for Lea EventAggregator
@@ -49,7 +47,7 @@ public interface IEventAggregator
     /// <param name="evt"></param>
     /// <returns></returns>
     Task PublishAsync(IEvent evt);
-    
+
     /// <summary>
     /// Subscribes a synchronous handler method to recieve events of Type T.
     /// </summary>

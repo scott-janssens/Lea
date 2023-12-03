@@ -653,13 +653,14 @@ namespace LeaTests
             _lea.Subscribe<TestEvent2>(Handler2);
             _lea.Publish(new TestEvent() { Value = "one" });
 
+            // No errors should be logged
             loggerMock.Verify(logger => logger.Log(
                     It.Is<LogLevel>(logLevel => logLevel == LogLevel.Information),
                     It.IsAny<EventId>(),
                     It.Is<It.IsAnyType>((@object, @type) => ((IReadOnlyList<KeyValuePair<string, object?>>)@object).Any(x => x.Value!.ToString() == "TestEvent")),
                     It.Is<Exception?>(x => x == null),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-                Times.Once);
+                Times.Never);
 
             loggerMock.Verify(logger => logger.Log(
                     It.Is<LogLevel>(logLevel => logLevel == LogLevel.Information),
@@ -667,7 +668,7 @@ namespace LeaTests
                     It.Is<It.IsAnyType>((@object, @type) => ((IReadOnlyList<KeyValuePair<string, object?>>)@object).Any(x => x.Value!.ToString() == "TestEvent2")),
                     It.Is<Exception?>(x => x == null),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-                Times.Once);
+                Times.Never);
         }
 
         [Test]

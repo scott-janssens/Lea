@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Diagnostics;
 using Microsoft.Extensions.Logging;
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using static Lea.IEventAggregator;
@@ -277,21 +278,27 @@ public partial class EventAggregator : IEventAggregator, IDisposable
 
         public void Invoke(IEvent evt, ILogger<IEventAggregator>? logger)
         {
+            ImmutableList<WeakReference> asyncImmutableList;
+            ImmutableList<WeakReference> immutableList;
+
             _readerWriterLock.EnterReadLock();
 
             try
             {
-                foreach (var reference in _asyncReferences.Values)
-                {
-                    InvokeAwaitInternal(reference, evt, logger);
-                }
-
-                foreach (var reference in _references.Values)
-                {
-                    InvokeInternal(_invoker!, reference, evt, logger);
-                }
+                asyncImmutableList = _asyncReferences.Values.ToImmutableList();
+                immutableList = _references.Values.ToImmutableList();
             }
             finally { _readerWriterLock.ExitReadLock(); }
+
+            foreach (var reference in asyncImmutableList)
+            {
+                InvokeAwaitInternal(reference, evt, logger);
+            }
+
+            foreach (var reference in immutableList)
+            {
+                InvokeInternal(_invoker!, reference, evt, logger);
+            }
         }
 
         private static void InvokeInternal(MethodInfo info, WeakReference reference, IEvent evt, ILogger<IEventAggregator>? logger)
