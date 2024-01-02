@@ -338,8 +338,6 @@ public partial class EventAggregator : IEventAggregator, IDisposable
                 }
             }
 
-            // TODO: Add throw on error which aggregates exceptions
-
             foreach (var item in immutableList)
             {
                 switch (item.Thread)

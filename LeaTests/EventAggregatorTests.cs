@@ -2,7 +2,6 @@ using Lea;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Diagnostics.CodeAnalysis;
-using System.Xml.Serialization;
 using static Lea.IEventAggregator;
 
 namespace LeaTests
@@ -23,14 +22,14 @@ namespace LeaTests
         {
             var handlerCalled = 0;
             string? lastValue = null;
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
             void Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
-                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                handlerThreadId = Environment.CurrentManagedThreadId;
             }
 
             _lea.Subscribe<TestEvent>(Handler);
@@ -125,12 +124,12 @@ namespace LeaTests
             var handlerCalled = 0;
             string? lastValue = null;
 
-            AsyncEventAggregatorHandler<TestEvent> Handler = async (evt) =>
+            async Task Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
                 await Task.Delay(1);
-            };
+            }
 
             _lea.Subscribe<TestEvent>(Handler);
             _lea.Publish(new TestEvent() { Value = "one" });
@@ -633,14 +632,14 @@ namespace LeaTests
         {
             var handlerCalled = 0;
             string? lastValue = null;
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
             void Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
-                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                handlerThreadId = Environment.CurrentManagedThreadId;
             }
 
             _lea.Subscribe<TestEvent>(Handler, SubscriberThread.BackgroundThread);
@@ -661,14 +660,14 @@ namespace LeaTests
         {
             var handlerCalled = 0;
             string? lastValue = null;
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
             Task Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
-                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                handlerThreadId = Environment.CurrentManagedThreadId;
                 return Task.CompletedTask;
             }
 
@@ -691,14 +690,14 @@ namespace LeaTests
             var context = new TestSynchronizationContext();
             var handlerCalled = 0;
             string? lastValue = null;
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
             void Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
-                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                handlerThreadId = Environment.CurrentManagedThreadId;
             }
 
             _lea.SetSynchronizationContext(context);
@@ -723,14 +722,14 @@ namespace LeaTests
             var context = new TestSynchronizationContext();
             var handlerCalled = 0;
             string? lastValue = null;
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
             Task Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
-                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                handlerThreadId = Environment.CurrentManagedThreadId;
                 return Task.CompletedTask;
             }
 
@@ -957,10 +956,10 @@ namespace LeaTests
             loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
             _lea = new EventAggregator(loggerMock.Object);
 
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
-            void Handler(TestEvent evt)
+            static void Handler(TestEvent evt)
             {
             }
 
@@ -984,10 +983,10 @@ namespace LeaTests
             loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
             _lea = new EventAggregator(loggerMock.Object);
 
-            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            var publishThreadId = Environment.CurrentManagedThreadId;
             int handlerThreadId = publishThreadId;
 
-            Task Handler(TestEvent evt)
+            static Task Handler(TestEvent evt)
             {
                 return Task.CompletedTask;
             }

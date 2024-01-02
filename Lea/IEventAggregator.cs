@@ -36,16 +36,20 @@ public interface IEventAggregator
     public delegate Task AsyncEventAggregatorHandler<in T>(T evt) where T : class, IEvent;
 
     /// <summary>
-    /// Publishes an event object.  All handlers subscribed for the event type will be called and passed this event object.
+    /// Publishes an event object.  All handlers subscribed for the event type will be called and passed this event object. Exceptions in
+    /// handlers will be logged and swallowed.
     /// </summary>
     /// <param name="evt">event object</param>
+    /// <exception cref="ArgumentNullException">evt is null.</exception>
     void Publish(IEvent evt);
 
     /// <summary>
-    /// Publishes an event object asynchronously.  All handlers subscribed for the event type will be called and passed this event object.
+    /// Publishes an event object.  All handlers subscribed for the event type will be called and passed this event object. Exceptions in
+    /// handlers will be logged and swallowed.
     /// </summary>
-    /// <param name="evt"></param>
-    /// <returns></returns>
+    /// <param name="evt">event object</param>
+    /// <exception cref="ArgumentNullException">evt is null.</exception>
+    /// <returns>Task</returns>
     Task PublishAsync(IEvent evt);
 
     /// <summary>
@@ -53,6 +57,8 @@ public interface IEventAggregator
     /// </summary>
     /// <typeparam name="T">event Type</typeparam>
     /// <param name="handler">synchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Invalid SubscriberThread value.</exception>
     /// <returns>A token object which can be used to unsubscribe the handler</returns>
     SubscriptionToken Subscribe<T>(EventAggregatorHandler<T> handler, SubscriberThread thread = SubscriberThread.PublisherThread) where T : class, IEvent;
 
@@ -61,6 +67,8 @@ public interface IEventAggregator
     /// </summary>
     /// <typeparam name="T">event Type</typeparam>
     /// <param name="handler">asynchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Invalid SubscriberThread value.</exception>
     /// <returns>A token object which can be used to unsubscribe the handler</returns>
     SubscriptionToken Subscribe<T>(AsyncEventAggregatorHandler<T> handler, SubscriberThread thread = SubscriberThread.PublisherThread) where T : class, IEvent;
 
@@ -69,6 +77,8 @@ public interface IEventAggregator
     /// </summary>
     /// <param name="type">event Type</typeparam>
     /// <param name="handler">synchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Invalid SubscriberThread value.</exception>
     /// <returns>A token object which can be used to unsubscribe the handler</returns>
     public SubscriptionToken Subscribe(Type type, EventAggregatorHandler<IEvent> handler, SubscriberThread thread = SubscriberThread.PublisherThread);
 
@@ -77,6 +87,8 @@ public interface IEventAggregator
     /// </summary>
     /// <param name="type">event Type</typeparam>
     /// <param name="handler">asynchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Invalid SubscriberThread value.</exception>
     /// <returns>A token object which can be used to unsubscribe the handler</returns>
     public SubscriptionToken Subscribe(Type type, AsyncEventAggregatorHandler<IEvent> handler, SubscriberThread thread = SubscriberThread.PublisherThread);
 
@@ -85,6 +97,7 @@ public interface IEventAggregator
     /// </summary>
     /// <typeparam name="T">event Type</typeparam>
     /// <param name="handler">synchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
     void Unsubscribe<T>(EventAggregatorHandler<T> handler) where T : class, IEvent;
 
     /// <summary>
@@ -92,6 +105,7 @@ public interface IEventAggregator
     /// </summary>
     /// <typeparam name="T">event Type</typeparam>
     /// <param name="handler">asynchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
     void Unsubscribe<T>(AsyncEventAggregatorHandler<T> handler) where T : class, IEvent;
 
     /// <summary>
@@ -99,6 +113,7 @@ public interface IEventAggregator
     /// </summary>
     /// <param name="type">event Type</typeparam>
     /// <param name="handler">synchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
     void Unsubscribe(Type type, EventAggregatorHandler<IEvent> handler);
 
     /// <summary>
@@ -106,6 +121,7 @@ public interface IEventAggregator
     /// </summary>
     /// <param name="type">event Type</typeparam>
     /// <param name="handler">asynchronous handler method</param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
     void Unsubscribe(Type type, AsyncEventAggregatorHandler<IEvent> handler);
 
     /// <summary>
@@ -113,6 +129,7 @@ public interface IEventAggregator
     /// </summary>
     /// <typeparam name="T">event Type</typeparam>
     /// <param name="token">token object returned by <see cref="Subscribe"/></param>
+    /// <exception cref="ArgumentNullException">handler is null.</exception>
     void Unsubscribe<T>(SubscriptionToken token) where T : class, IEvent;
 
     /// <summary>
