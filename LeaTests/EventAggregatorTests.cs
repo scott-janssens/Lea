@@ -2,6 +2,7 @@ using Lea;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Diagnostics.CodeAnalysis;
+using System.Xml.Serialization;
 using static Lea.IEventAggregator;
 
 namespace LeaTests
@@ -22,11 +23,14 @@ namespace LeaTests
         {
             var handlerCalled = 0;
             string? lastValue = null;
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
 
             void Handler(TestEvent evt)
             {
                 handlerCalled++;
                 lastValue = evt.Value;
+                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
             }
 
             _lea.Subscribe<TestEvent>(Handler);
@@ -38,6 +42,7 @@ namespace LeaTests
             {
                 Assert.That(handlerCalled, Is.EqualTo(1));
                 Assert.That(lastValue, Is.EqualTo("one"));
+                Assert.That(publishThreadId, Is.EqualTo(handlerThreadId));
             });
         }
 
@@ -621,6 +626,132 @@ namespace LeaTests
             });
         }
 
+        #region Threading
+
+        [Test]
+        public void BackgroundThread()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
+
+            void Handler(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+            }
+
+            _lea.Subscribe<TestEvent>(Handler, SubscriberThread.BackgroundThread);
+            _lea.Publish(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe<TestEvent>(Handler);
+            _lea.Publish(new TestEvent() { Value = "two" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+                Assert.That(publishThreadId, Is.Not.EqualTo(handlerThreadId));
+            });
+        }
+
+        [Test]
+        public async Task BackgroundThreadAsync()
+        {
+            var handlerCalled = 0;
+            string? lastValue = null;
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
+
+            Task Handler(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                return Task.CompletedTask;
+            }
+
+            _lea.Subscribe<TestEvent>(Handler, SubscriberThread.BackgroundThread);
+            await _lea.PublishAsync(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe<TestEvent>(Handler);
+            await _lea.PublishAsync(new TestEvent() { Value = "two" });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+                Assert.That(publishThreadId, Is.Not.EqualTo(handlerThreadId));
+            });
+        }
+
+        [Test]
+        public void ContextThread()
+        {
+            var context = new TestSynchronizationContext();
+            var handlerCalled = 0;
+            string? lastValue = null;
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
+
+            void Handler(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+            }
+
+            _lea.SetSynchronizationContext(context);
+            _lea.Subscribe<TestEvent>(Handler, SubscriberThread.ContextThread);
+            _lea.Publish(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe<TestEvent>(Handler);
+            _lea.Publish(new TestEvent() { Value = "two" });
+
+            Task.Delay(100).Wait();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+                Assert.That(publishThreadId, Is.Not.EqualTo(handlerThreadId));
+            });
+        }
+
+        [Test]
+        public async Task ContextThreadAsync()
+        {
+            var context = new TestSynchronizationContext();
+            var handlerCalled = 0;
+            string? lastValue = null;
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
+
+            Task Handler(TestEvent evt)
+            {
+                handlerCalled++;
+                lastValue = evt.Value;
+                handlerThreadId = Thread.CurrentThread.ManagedThreadId;
+                return Task.CompletedTask;
+            }
+
+            _lea.SetSynchronizationContext(context);
+            _lea.Subscribe<TestEvent>(Handler, SubscriberThread.ContextThread);
+            await _lea.PublishAsync(new TestEvent() { Value = "one" });
+            _lea.Unsubscribe<TestEvent>(Handler);
+            await _lea.PublishAsync(new TestEvent() { Value = "two" });
+
+            await Task.Delay(100);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(handlerCalled, Is.EqualTo(1));
+                Assert.That(lastValue, Is.EqualTo("one"));
+                Assert.That(publishThreadId, Is.Not.EqualTo(handlerThreadId));
+            });
+        }
+
+        #endregion
+
         #region Failures
 
         [Test]
@@ -819,6 +950,73 @@ namespace LeaTests
             });
         }
 
+        [Test]
+        public void ContextThreadNoContext()
+        {
+            var loggerMock = new Mock<ILogger<IEventAggregator>>();
+            loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+            _lea = new EventAggregator(loggerMock.Object);
+
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
+
+            void Handler(TestEvent evt)
+            {
+            }
+
+            _lea.Subscribe<TestEvent>(Handler, SubscriberThread.ContextThread);
+            _lea.Publish(new TestEvent() { Value = "one" });
+
+            loggerMock.Verify(
+                logger => logger.Log(
+                    It.Is<LogLevel>(logLevel => logLevel == LogLevel.Error),
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((@object, @type) => true),
+                    It.Is<Exception>(x => x is InvalidOperationException),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task ContextThreadAsyncNoContext()
+        {
+            var loggerMock = new Mock<ILogger<IEventAggregator>>();
+            loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+            _lea = new EventAggregator(loggerMock.Object);
+
+            var publishThreadId = Thread.CurrentThread.ManagedThreadId;
+            int handlerThreadId = publishThreadId;
+
+            Task Handler(TestEvent evt)
+            {
+                return Task.CompletedTask;
+            }
+
+            _lea.Subscribe<TestEvent>(Handler, SubscriberThread.ContextThread);
+            await _lea.PublishAsync(new TestEvent() { Value = "one" });
+
+            loggerMock.Verify(
+                logger => logger.Log(
+                    It.Is<LogLevel>(logLevel => logLevel == LogLevel.Error),
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((@object, @type) => true),
+                    It.Is<Exception>(x => x is InvalidOperationException),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+        }
+
+        [Test]
+        public void SubscribeBadThreadEnum()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => _lea.Subscribe<TestEvent>(t => { }, (SubscriberThread)42));
+        }
+
+        [Test]
+        public void SubscribeAsyncBadThreadEnum()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => _lea.Subscribe<TestEvent>(t => { return Task.CompletedTask; }, (SubscriberThread)42));
+        }
+
         #endregion
 
         private void SetUpOutOfScopeHandler(EventAggregatorHandler<TestEvent> callback)
@@ -854,5 +1052,14 @@ namespace LeaTests
     [ExcludeFromCodeCoverage]
     public class TestEvent2 : IEvent
     {
+    }
+
+    [ExcludeFromCodeCoverage]
+    public class TestSynchronizationContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Task.Run(() => d(state));
+        }
     }
 }
